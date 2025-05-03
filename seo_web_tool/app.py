@@ -33,6 +33,8 @@ HTML_TEMPLATE = '''
         .section-title { border-bottom: 2px solid #2980b9; padding-bottom: 0.3em; margin-top: 1.5em; margin-bottom: 0.8em; color: #2980b9; }
         ul.warnings { background: #ffe6e6; color: #a94442; border: 1px solid #a94442; padding: 1em; border-radius: 5px; }
         ul.warnings li { margin-bottom: 0.5em; }
+        ul.recommendations { background: #e6f7ff; color: #31708f; border: 1px solid #31708f; padding: 1em; border-radius: 5px; }
+        ul.recommendations li { margin-bottom: 0.5em; }
     </style>
 </head>
 <body>
@@ -103,6 +105,15 @@ HTML_TEMPLATE = '''
         <ul class="warnings">
             {% for warn in warnings %}
             <li>{{ warn }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if recommendations %}
+        <h3 class="section-title">Rekomendasi Perbaikan SEO</h3>
+        <ul class="recommendations">
+            {% for rec in recommendations %}
+            <li>{{ rec }}</li>
             {% endfor %}
         </ul>
         {% endif %}
@@ -218,6 +229,33 @@ def estimate_readability(text):
     else:
         return f"Keterbacaan rendah, kalimat cenderung panjang (Rata-rata panjang kalimat: {avg_sentence_len:.1f} kata)."
 
+def generate_recommendations(seo_result, canonical_href, https_used, url_length, sitemap_status, robots_status, readability_result):
+    recs = []
+
+    if seo_result.title == 'Tidak ada title ditemukan':
+        recs.append("Tambahkan tag <title> yang deskriptif dan relevan di halaman Anda.")
+    if seo_result.meta_description == 'Tidak ada meta description ditemukan':
+        recs.append("Tambahkan meta description yang menggambarkan isi halaman dengan jelas.")
+    if seo_result.headings.get('h1', 0) == 0:
+        recs.append("Tambahkan setidaknya satu tag heading <h1> pada halaman untuk judul utama.")
+    if seo_result.images_without_alt > 0:
+        recs.append(f"Tambahkan atribut alt pada gambar yang belum memiliki alt ({seo_result.images_without_alt} gambar).")
+    if canonical_href == 'Tidak ditemukan':
+        recs.append("Tambahkan tag canonical untuk menghindari duplikasi konten.")
+    if https_used == 'Tidak':
+        recs.append("Gunakan HTTPS untuk keamanan dan peningkatan peringkat SEO.")
+    if url_length > 100:
+        recs.append("Buat URL lebih singkat dan mudah dibaca, idealnya kurang dari 100 karakter.")
+    if seo_result.link_external == 0:
+        recs.append("Tambahkan link eksternal yang relevan untuk meningkatkan otoritas halaman.")
+    if sitemap_status == 'Tidak ditemukan':
+        recs.append("Buat file sitemap.xml untuk membantu mesin pencari mengindeks situs Anda.")
+    if robots_status == 'Tidak ditemukan':
+        recs.append("Tambahkan file robots.txt untuk mengatur akses mesin pencari ke situs Anda.")
+    if 'rendah' in readability_result.lower():
+        recs.append("Sederhanakan kalimat pada halaman untuk meningkatkan keterbacaan.")
+    return recs
+
 @app.route('/', methods=['GET', 'POST'])
 def home():
     seo_result = None
@@ -234,6 +272,7 @@ def home():
     https_used = 'Tidak diketahui'
     url_length = 0
     warnings = []
+    recommendations = []
 
     if request.method == 'POST':
         url = request.form.get('url','').strip()
@@ -287,6 +326,8 @@ def home():
                 if seo_result.link_external == 0:
                     warnings.append("Tidak ditemukan link eksternal pada halaman, link eksternal yang relevan dapat membantu SEO.")
 
+                recommendations = generate_recommendations(seo_result, canonical_href, https_used, url_length, sitemap_status, robots_status, readability_result)
+
     return render_template_string(HTML_TEMPLATE,
                                   seo_result=seo_result,
                                   load_time=load_time,
@@ -300,7 +341,8 @@ def home():
                                   canonical_tag=canonical_href,
                                   https_used=https_used,
                                   url_length=url_length,
-                                  warnings=warnings)
+                                  warnings=warnings,
+                                  recommendations=recommendations)
 
 if __name__ == '__main__':
     app.run(debug=True)
